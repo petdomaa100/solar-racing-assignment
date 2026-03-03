@@ -9,32 +9,46 @@
 #define MOCK_VALUES_CNT 5
 #define MAX_STRINGIFIED_NUMBER_LEN 32
 
+const Clay_Color COLOR_LIGHT  = (Clay_Color) {224, 215, 210, 255};
+const Clay_Color COLOR_RED    = (Clay_Color) {168,  66,  28, 255};
+const Clay_Color COLOR_ORANGE = (Clay_Color) {225, 138,  50, 255};
+
 typedef struct {
 	Clay_TextElementConfig textConfig;
 	float values[MOCK_VALUES_CNT];
 	Clay_String valuesStr[MOCK_VALUES_CNT];
 } Ctx;
 
+// =====
+// UI Rendering
+// =====
+
 void clayErrorHandler(Clay_ErrorData error) {
 	printf("Clay Error: %s\n", error.errorText.chars);
 	assert(0);
 }
 
-void renderClayUi(Ctx *ctx) {
-	CLAY(CLAY_ID("root"), {
+void buildGui(Ctx *ctx) {
+	CLAY(CLAY_ID("Root"), {
 		.layout = {
+			.sizing = { 
+				.width  = CLAY_SIZING_GROW(0),
+				.height = CLAY_SIZING_GROW(0),
+			},
 			.layoutDirection = CLAY_LEFT_TO_RIGHT,
-			.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
-			.childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER },
-			.childGap = 50,
-		}
+			.childAlignment  = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER },
+			.childGap        = 50,
+		},
+		.backgroundColor = COLOR_LIGHT,
 	}) {
-		for (int i = 0; i < MOCK_VALUES_CNT; i++) {\
+		for (int i = 0; i < MOCK_VALUES_CNT; i++) {
 			CLAY_TEXT(ctx->valuesStr[i], &ctx->textConfig);
 		}
 	}
 }
 
+// =====
+// UART Signal Processing
 // =====
 
 int generateMockUartSignal(char *dst, size_t dstSize) {
@@ -88,19 +102,23 @@ void parseUartData(char *uartBuffer, Ctx *ctx) {
 	}
 }
 
-void updateState(char *uartBuffer, size_t uartBufferSize, Ctx *ctx) {
-	const double interval = 0.05;
-	static double lastTime = 0.0;
+void mockNewUartSignal(char *uartBuffer, size_t uartBufferSize, Ctx *ctx) {
+	const double intervalSec = 0.3; // 300ms
+	static double lastTime = 0;
 
 	double now = GetTime();
 
-	if ((now - lastTime) >= interval) {
+	if ((now - lastTime) >= intervalSec) {
 		lastTime = now;
 
 		generateMockUartSignal(uartBuffer, uartBufferSize);
 		parseUartData(uartBuffer, ctx);
 	}
 }
+
+// =====
+// Main entrypoint
+// =====
 
 int main() {
 	srand(69420); // Seed
@@ -110,28 +128,22 @@ int main() {
 
 	// =====
 
-	const int SCREEN_WIDTH = 900;
-	const int SCREEN_HEIGHT = 600;
-
-	Clay_Raylib_Initialize(
-		SCREEN_WIDTH,
-		SCREEN_HEIGHT,
-		"Battery Management System GUI",
-		0 // Flags
-	);
+	Clay_Raylib_Initialize(900, 600, "Battery Management System GUI", FLAG_WINDOW_RESIZABLE);
 
 	uint64_t arenaSize = Clay_MinMemorySize();
 
+	Clay_Arena clayMemoryArena = {
+		.memory   = malloc(arenaSize),
+		.capacity = arenaSize,
+	};
+
 	Clay_Initialize(
-		(Clay_Arena) { 
-			.memory = malloc(arenaSize),
-			.capacity = arenaSize,
-		},
+		clayMemoryArena,
 		(Clay_Dimensions) {
-			.width = (float)SCREEN_WIDTH,
-			.height = (float)SCREEN_HEIGHT
+			.width  = (float)GetScreenWidth(),
+			.height = (float)GetScreenHeight()
 		},
-		(Clay_ErrorHandler){
+		(Clay_ErrorHandler) {
 			.errorHandlerFunction = clayErrorHandler,
 			.userData = NULL,
 		}
@@ -141,32 +153,58 @@ int main() {
 
 	// =====
 
-	Font fonts[1] = { GetFontDefault() };
+	Font fonts[1] = { LoadFont("assets/Roboto-Regular.ttf") };
 
 	Clay_SetMeasureTextFunction(Raylib_MeasureText, fonts);
 
 	ctx.textConfig = (Clay_TextElementConfig) {
-		.fontSize = 32,
-		.textColor = { 0, 0, 0, 255 },
+		.fontSize      = 32,
+		.textColor     = {0, 0, 0, 255},
 		.textAlignment = CLAY_TEXT_ALIGN_CENTER,
 	};
 
-	while (!WindowShouldClose()) {		
-		updateState(uartBuffer, sizeof(uartBuffer), &ctx);
-		
-		Clay_BeginLayout();
+	while (!WindowShouldClose()) {
+		// Update window dimensions & mouse state
 
-		renderClayUi(&ctx);
+		Clay_SetLayoutDimensions((Clay_Dimensions) {
+			(float)GetScreenWidth(),
+			(float)GetScreenHeight()
+		});
+
+		Vector2 mouse = GetMousePosition();
+		Vector2 mouseScrollDelta = GetMouseWheelMoveV();
+
+		Clay_SetPointerState(
+			(Clay_Vector2) { mouse.x, mouse.y },
+			IsMouseButtonDown(MOUSE_BUTTON_LEFT)
+		);
+
+		Clay_UpdateScrollContainers(
+			true,
+			(Clay_Vector2) { mouseScrollDelta.x, mouseScrollDelta.y },
+			GetFrameTime()
+		);
+
+		// =====
+		// Compute layout & render GUI
+
+		// When live, this would be triggered by UART events instead of mocked every frame
+		mockNewUartSignal(uartBuffer, sizeof(uartBuffer), &ctx);
+
+		Clay_BeginLayout();
+		buildGui(&ctx);
 
 		Clay_RenderCommandArray renderCommands = Clay_EndLayout();
 
 		BeginDrawing();	
-		ClearBackground(RAYWHITE);
+		ClearBackground(WHITE);
 		Clay_Raylib_Render(renderCommands, fonts);
 		EndDrawing();
 	}
 
 	// =====
+
+	free(clayMemoryArena.memory);
 
 	return 0;
 }

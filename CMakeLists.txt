@@ -35,6 +35,6 @@ endif()
 add_custom_command(
 	TARGET bms_gui POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
-	${CMAKE_CURRENT_SOURCE_DIR}/resources
-	${CMAKE_CURRENT_BINARY_DIR}/resources
+	${CMAKE_CURRENT_SOURCE_DIR}/assets
+	${CMAKE_CURRENT_BINARY_DIR}/assets
 )
