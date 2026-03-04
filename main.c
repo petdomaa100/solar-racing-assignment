@@ -19,18 +19,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <float.h>
 
-#define MODULES_CNT                4
+#define MODULE_CNT                 4
 #define PCB_CNT                    4
 #define CELL_CNT_PER_MODULE        40
 #define TEMP_SENSOR_CNT_PER_MODULE 12
 
 #define VALUES_TO_GENERATE_CNT (                 \
-    (MODULES_CNT * CELL_CNT_PER_MODULE) +        \
-    (MODULES_CNT * TEMP_SENSOR_CNT_PER_MODULE) + \
-    (PCB_CNT) +                                  \
-    14                                           \
+	(MODULE_CNT * CELL_CNT_PER_MODULE) +         \
+	(MODULE_CNT * TEMP_SENSOR_CNT_PER_MODULE) +  \
+	(PCB_CNT) +                                  \
+	14                                           \
 )                                                // 14x non-array fields in BmsState struct
 
 // This implementation assumes that no stringified float will take up more than 32 characters
@@ -42,67 +41,353 @@ typedef struct {
 } FloatAndStr;
 
 typedef struct {
-	FloatAndStr cellVoltages[MODULES_CNT * CELL_CNT_PER_MODULE]; //     Voltages of all cells across all modules
-	FloatAndStr cellTemps[MODULES_CNT * TEMP_SENSOR_CNT_PER_MODULE]; // Temps of all sensors across all modules
-	FloatAndStr pcbTemps[PCB_CNT];
-	FloatAndStr batteryAvgTemp;
-	FloatAndStr humidity;
-	FloatAndStr minTemp;
-	FloatAndStr maxTemp;
-	FloatAndStr avgTemp;
-	FloatAndStr voltageLow;
-	FloatAndStr voltagePack;
-	FloatAndStr currentLow;
-	FloatAndStr currentPack;
-	FloatAndStr minBMSTemp;
-	FloatAndStr maxBMSTemp;
-	FloatAndStr minCellVolt;
-	FloatAndStr maxCellVolt;
-	FloatAndStr stateOfCharge;
-} BmsState;
-
-const Clay_Color COLOR_LIGHT  = (Clay_Color) {224, 215, 210, 255};
-const Clay_Color COLOR_RED    = (Clay_Color) {168,  66,  28, 255};
-const Clay_Color COLOR_ORANGE = (Clay_Color) {225, 138,  50, 255};
+	Clay_String label;
+	Clay_String value;
+} TableRow;
 
 typedef struct {
-	Clay_TextElementConfig textConfig;
+	Clay_String title;
+	TableRow *rows;
+	int rowCount;
+} Table;
+
+typedef struct {
+	FloatAndStr cellVoltages[MODULE_CNT * CELL_CNT_PER_MODULE];     // Voltages of all cells across all modules
+	FloatAndStr cellTemps[MODULE_CNT * TEMP_SENSOR_CNT_PER_MODULE]; // Temps of all sensors across all modules
+	FloatAndStr pcbTemps[PCB_CNT];                                  // DONE
+	FloatAndStr batteryAvgTemp;                                     // DONE
+	FloatAndStr humidity;                                           // DONE
+	FloatAndStr minTemp;                                            // DONE
+	FloatAndStr maxTemp;                                            // DONE
+	FloatAndStr avgTemp;                                            // DONE
+	FloatAndStr voltageLow;                                         // 
+	FloatAndStr voltagePack;                                        // 
+	FloatAndStr currentLow;                                         // 
+	FloatAndStr currentPack;                                        // 
+	FloatAndStr minBMSTemp;                                         // 
+	FloatAndStr maxBMSTemp;                                         // 
+	FloatAndStr minCellVolt;                                        // 
+	FloatAndStr maxCellVolt;                                        // 
+	FloatAndStr stateOfCharge;                                      // 
+} BmsState;
+
+typedef struct {
+	struct {
+		Clay_TextElementConfig text;
+		Clay_TextElementConfig boldText;
+		Clay_TextElementConfig heading1;
+		Clay_TextElementConfig heading2;
+		Clay_TextElementConfig heading3;
+	} textConfigs;
 	BmsState state;
 } Ctx;
+
+const Clay_Color COLOR_RED        = {191,  50,   8, 255};
+const Clay_Color COLOR_GREEN      = {  0, 204,  58, 255};
+const Clay_Color COLOR_BLUE       = {  0,  58, 204, 255};
+const Clay_Color COLOR_BLACK_BG   = {  9,   9,   9, 255};
+const Clay_Color COLOR_GRAY_BG    = { 25,  26,  28, 255};
+const Clay_Color COLOR_BORDER     = { 33,  34,  36, 255};
+const Clay_Color COLOR_TEXT_GRAY  = { 58,  58,  60, 255};
+const Clay_Color COLOR_TEXT_WHITE = {173, 174, 176, 255};
+
+const Clay_BorderElementConfig BORDER       = { COLOR_BORDER, CLAY_BORDER_OUTSIDE(2) };
+const Clay_BorderElementConfig BORDER_RED   = { COLOR_RED,    CLAY_BORDER_OUTSIDE(2) };
+const Clay_BorderElementConfig BORDER_GREEN = { COLOR_GREEN,  CLAY_BORDER_OUTSIDE(2) };
+const Clay_BorderElementConfig BORDER_BLUE  = { COLOR_BLUE,   CLAY_BORDER_OUTSIDE(2) };
 
 // =====
 // UI Rendering
 // =====
 
-void clayErrorHandler(Clay_ErrorData error) {
-	printf("Clay Error: %s\n", error.errorText.chars);
-	assert(0);
+static float clamp(float value, float min, float max) {
+	return (value < min) ? min : (value > max) ? max : value;
+}
+
+Clay_Color lerpBetween2Colors(float n, float min, float max) {
+	n = clamp(n, min, max);
+
+	float t = clamp((n - min) / (max - min), 0, 1);
+	float r = 255 * t;
+	float g = 255 * (1 - t);
+
+	return (Clay_Color){r, g, 0, 255};
+}
+
+void buildModuleInfoCard(int moduleIdx, Ctx *ctx) {
+	Clay_String title = CLAY_STRING("Module X");
+
+	switch (moduleIdx) {
+	case 0: title.chars = "Module 1"; break;
+	case 1: title.chars = "Module 2"; break;
+	case 2: title.chars = "Module 3"; break;
+	case 3: title.chars = "Module 4"; break;
+	default: assert(0); break;
+	}
+
+	// =====
+
+	CLAY_AUTO_ID({
+		.layout = {
+			.sizing          = { CLAY_SIZING_GROW(0) },
+			.layoutDirection = CLAY_TOP_TO_BOTTOM,
+			.padding         = CLAY_PADDING_ALL(8),
+			.childAlignment  = { CLAY_ALIGN_X_CENTER },
+			.childGap        = 8,
+		},
+		.cornerRadius    = CLAY_CORNER_RADIUS(8),
+		.backgroundColor = COLOR_GRAY_BG,
+		.border          = BORDER,
+	}) {
+		CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0) }, .childAlignment = { CLAY_ALIGN_X_CENTER } } }) {
+			CLAY_TEXT(title, &ctx->textConfigs.heading2);
+		}
+
+		CLAY_AUTO_ID({ .layout = { .childGap = 8 } }) {
+			const int TABLE_1_ROW_CNT = 6;
+			const int TABLE_1_COL_CNT = CELL_CNT_PER_MODULE / TABLE_1_ROW_CNT;
+			const int TABLE_2_ROW_CNT = 6;
+			const int TABLE_2_COL_CNT = TEMP_SENSOR_CNT_PER_MODULE / TABLE_2_ROW_CNT;
+			const int ROW_GAP         = 4;
+			const int CELL_SIZE       = 35;
+
+			CLAY_AUTO_ID({ .layout = { .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = ROW_GAP } }) {
+				CLAY_TEXT(CLAY_STRING("Voltage (V)"), &ctx->textConfigs.heading3);
+
+				for (int r = 0; r < TABLE_1_ROW_CNT; r++) {
+					CLAY_AUTO_ID({
+						.layout = { .childGap = 4 }
+					}) {
+						for (int c = 0; c < CELL_CNT_PER_MODULE / TABLE_1_ROW_CNT; c++) {
+							int idx = moduleIdx * CELL_CNT_PER_MODULE + r * (CELL_CNT_PER_MODULE / TABLE_1_ROW_CNT) + c;
+
+							FloatAndStr cellVoltage = ctx->state.cellVoltages[idx];
+							Clay_Color bg = lerpBetween2Colors(cellVoltage.asFloat, ctx->state.minCellVolt.asFloat, ctx->state.maxCellVolt.asFloat);
+
+							CLAY_AUTO_ID({
+								.layout = {
+									.sizing         = { CLAY_SIZING_FIXED(CELL_SIZE), CLAY_SIZING_FIXED(CELL_SIZE) },
+									.childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },
+								},
+								.backgroundColor = bg,
+							}) {
+								CLAY_TEXT(
+									cellVoltage.asString,
+									CLAY_TEXT_CONFIG({ .fontSize = 14, .textColor = {0, 0, 0, 255} })
+								);
+							}
+						}
+					}
+				}
+			}
+
+			// =====
+
+			CLAY_AUTO_ID({ .layout = { .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = ROW_GAP } }) {
+				CLAY_TEXT(CLAY_STRING("Temp (C)"), &ctx->textConfigs.heading3);
+
+				for (int r = 0; r < TABLE_2_ROW_CNT; r++) {
+					CLAY_AUTO_ID({
+						.layout = { .childGap = 4 }
+					}) {
+						for (int c = 0; c < TEMP_SENSOR_CNT_PER_MODULE / TABLE_2_ROW_CNT; c++) {
+							int idx = moduleIdx * TEMP_SENSOR_CNT_PER_MODULE + r * (TEMP_SENSOR_CNT_PER_MODULE / TABLE_2_ROW_CNT) + c;
+
+							FloatAndStr cellTemp = ctx->state.cellTemps[idx];
+							Clay_Color bg = lerpBetween2Colors(cellTemp.asFloat, ctx->state.minTemp.asFloat, ctx->state.maxTemp.asFloat);
+
+							CLAY_AUTO_ID({
+								.layout = {
+									.sizing         = { CLAY_SIZING_FIXED(CELL_SIZE), CLAY_SIZING_FIXED(CELL_SIZE) },
+									.childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },
+								},
+								.backgroundColor = bg,
+							}) {
+								CLAY_TEXT(
+									cellTemp.asString,
+									CLAY_TEXT_CONFIG({ .fontSize = 14, .textColor = {0, 0, 0, 255} })
+								);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+}
+
+void buildTableCard(Table *table, Ctx *ctx) {
+	CLAY_AUTO_ID({
+		.layout = {
+			.sizing          = { CLAY_SIZING_FIT(0), CLAY_SIZING_GROW(0) },
+			.layoutDirection = CLAY_TOP_TO_BOTTOM,
+			.padding         = CLAY_PADDING_ALL(8),
+			.childGap        = 6,
+		},
+		.cornerRadius    = CLAY_CORNER_RADIUS(8),
+		.backgroundColor = COLOR_GRAY_BG,
+		.border          = BORDER,
+	}) {
+		// Header row
+		CLAY_AUTO_ID({ .layout = { .padding = { 0, 0, 0, 8 } } }) {
+			CLAY_TEXT(table->title, &ctx->textConfigs.heading2);
+		}
+
+		// Data rows
+		for (int i = 0; i < table->rowCount; i++) {
+			TableRow row = table->rows[i];
+
+			CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0) }, .childGap = 4 } }) {
+				CLAY_TEXT(row.label, &ctx->textConfigs.text);
+
+				CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0) } } });
+
+				CLAY_TEXT(row.value, &ctx->textConfigs.text);
+			}
+		}
+	}
 }
 
 void buildGui(Ctx *ctx) {
+	TableRow pcbTempsTableRows[PCB_CNT] = {
+		(TableRow) { .label = CLAY_STRING("PCB 1"), .value = ctx->state.pcbTemps[0].asString },
+		(TableRow) { .label = CLAY_STRING("PCB 2"), .value = ctx->state.pcbTemps[1].asString },
+		(TableRow) { .label = CLAY_STRING("PCB 3"), .value = ctx->state.pcbTemps[2].asString },
+		(TableRow) { .label = CLAY_STRING("PCB 4"), .value = ctx->state.pcbTemps[3].asString },
+	};
+
+	Table pcbTempsTable = {
+		.title    = CLAY_STRING("PCB Temps (C)"),
+		.rows     = pcbTempsTableRows,
+		.rowCount = PCB_CNT,
+	};
+
+	// =====
+
+	TableRow ambientInfoTableRows[4] = {
+		(TableRow) { .label = CLAY_STRING("Min. Temp (C)"), .value = ctx->state.minTemp.asString  },
+		(TableRow) { .label = CLAY_STRING("Max. Temp (C)"), .value = ctx->state.maxTemp.asString  },
+		(TableRow) { .label = CLAY_STRING("Avg. Temp (C)"), .value = ctx->state.avgTemp.asString  },
+		(TableRow) { .label = CLAY_STRING("Humidity"),      .value = ctx->state.humidity.asString },
+	};
+
+	Table ambientInfoTable = {
+		.title    = CLAY_STRING("Ambient Info"),
+		.rows     = ambientInfoTableRows,
+		.rowCount = 4,
+	};
+
+	// =====
+
+	TableRow bmsTempsTableRows[2] = {
+		(TableRow) { .label = CLAY_STRING("Min. BMS Temp (C)"), .value = ctx->state.minBMSTemp.asString },
+		(TableRow) { .label = CLAY_STRING("Max. BMS Temp (C)"), .value = ctx->state.maxBMSTemp.asString },
+	};
+
+	Table bmsTempsTable = {
+		.title    = CLAY_STRING("BMS PCB Temps"),
+		.rows     = bmsTempsTableRows,
+		.rowCount = 2,
+	};
+
+	// =====
+
+	TableRow cellVoltageTableRows[3] = {
+		(TableRow) { .label = CLAY_STRING("Min. Cell Volt (V)"), .value = ctx->state.minCellVolt.asString },
+		(TableRow) { .label = CLAY_STRING("Max. Cell Volt (V)"), .value = ctx->state.maxCellVolt.asString },
+		(TableRow) { .label = CLAY_STRING("Pack Voltage (V)"),   .value = ctx->state.voltagePack.asString },
+	};
+
+	Table cellVoltageTable = {
+		.title    = CLAY_STRING("Cell Voltages"),
+		.rows     = cellVoltageTableRows,
+		.rowCount = 3,
+	};
+
+	// =====
+
+	TableRow packCurrentTableRows[3] = {
+		(TableRow) { .label = CLAY_STRING("LV Voltage (V)"),   .value = ctx->state.voltageLow.asString  },
+		(TableRow) { .label = CLAY_STRING("LV Current (A)"),   .value = ctx->state.currentLow.asString  },
+		(TableRow) { .label = CLAY_STRING("Pack Current (A)"), .value = ctx->state.currentPack.asString },
+	};
+
+	Table packCurrentTable = {
+		.title    = CLAY_STRING("Voltages & Currents"),
+		.rows     = packCurrentTableRows,
+		.rowCount = 3,
+	};
+
+	// =====
+
 	CLAY(CLAY_ID("Root"), {
 		.layout = {
-			.sizing = { 
-				.width  = CLAY_SIZING_GROW(0),
-				.height = CLAY_SIZING_GROW(0),
-			},
-			.layoutDirection = CLAY_TOP_TO_BOTTOM,
+			.sizing          = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) },
+			.childAlignment  = { CLAY_ALIGN_X_CENTER },
 		},
-		.backgroundColor = COLOR_LIGHT,
+		.clip = {
+			.vertical    = true,
+			.horizontal  = true,
+			.childOffset = Clay_GetScrollOffset(),
+		},
+		.backgroundColor = COLOR_BLACK_BG,
 	}) {
 		CLAY_AUTO_ID({
 			.layout = {
-				.sizing = { 
-					.width  = CLAY_SIZING_GROW(0),
-					.height = CLAY_SIZING_GROW(0),
-				},
-				.layoutDirection = CLAY_LEFT_TO_RIGHT,
-				.childAlignment  = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER },
-				.childGap        = 25,
-			},
+				.sizing          = { CLAY_SIZING_GROW(0, 1380) },
+				.layoutDirection = CLAY_TOP_TO_BOTTOM,
+				.padding         = CLAY_PADDING_ALL(16),
+				.childGap        = 8,
+			}
 		}) {
-			for (int i = 0; i < PCB_CNT; i++) {
-				CLAY_TEXT(ctx->state.pcbTemps[i].asString, &ctx->textConfig);
+			CLAY_AUTO_ID({
+				.layout = {
+					.sizing         = { CLAY_SIZING_GROW(0) },
+					.padding        = CLAY_PADDING_ALL(8),
+					.childAlignment = { CLAY_ALIGN_X_CENTER },
+				},
+				.cornerRadius    = CLAY_CORNER_RADIUS(8),
+				.backgroundColor = COLOR_GRAY_BG,
+				.border          = BORDER,
+			}) {
+				CLAY_TEXT(CLAY_STRING("Battery Management System"), &ctx->textConfigs.heading1);
+			}
+
+			CLAY_AUTO_ID({
+				.layout = {
+					.sizing         = { CLAY_SIZING_GROW(0) },
+					.childAlignment = { CLAY_ALIGN_X_CENTER },
+					.padding        = { 0, 0, 16, 0 }, // Top margin
+					.childGap       = 8,
+				}
+			}) {
+				for (int i = 0; i < MODULE_CNT; i++) {
+					buildModuleInfoCard(i, ctx);
+				}
+			}
+
+			CLAY_AUTO_ID({
+				.layout = {
+					.sizing   = { CLAY_SIZING_GROW(0) },
+					.childGap = 8,
+				}
+			}) {
+				buildTableCard(&pcbTempsTable, ctx);
+				buildTableCard(&ambientInfoTable, ctx);
+				buildTableCard(&bmsTempsTable, ctx);
+				buildTableCard(&cellVoltageTable, ctx);
+				buildTableCard(&packCurrentTable, ctx);
+
+				CLAY_AUTO_ID({
+					.layout = {
+						.sizing  = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) },
+						.padding = CLAY_PADDING_ALL(8),
+					},
+					.cornerRadius    = CLAY_CORNER_RADIUS(8),
+					.backgroundColor = COLOR_GRAY_BG,
+					.border          = BORDER,
+				}) {}
 			}
 		}
 	}
@@ -120,11 +405,11 @@ void generateMockUartSignal(char *dst, int dstSize) {
 	float values[VALUES_TO_GENERATE_CNT];
 	int idx = 0;
 
-	for (int i = 0; i < MODULES_CNT * CELL_CNT_PER_MODULE; i++) {
+	for (int i = 0; i < MODULE_CNT * CELL_CNT_PER_MODULE; i++) {
 		values[idx++] = 3.7 + simulateJitter(0.5); // Cell voltages
 	}
 
-	for (int i = 0; i < MODULES_CNT * TEMP_SENSOR_CNT_PER_MODULE; i++) {
+	for (int i = 0; i < MODULE_CNT * TEMP_SENSOR_CNT_PER_MODULE; i++) {
 		values[idx++] = 20 + simulateJitter(20); // Cell temps
 	}
 
@@ -168,8 +453,8 @@ void generateMockUartSignal(char *dst, int dstSize) {
 }
 
 void parseUartData(char *uartBuffer, Ctx *ctx) {
-	const int CELLS_TOTAL      = MODULES_CNT * CELL_CNT_PER_MODULE;
-	const int TEMPS_TOTAL      = MODULES_CNT * TEMP_SENSOR_CNT_PER_MODULE;
+	const int CELLS_TOTAL      = MODULE_CNT * CELL_CNT_PER_MODULE;
+	const int TEMPS_TOTAL      = MODULE_CNT * TEMP_SENSOR_CNT_PER_MODULE;
 	const int BASE_SCALARS_IDX = CELLS_TOTAL + TEMPS_TOTAL + PCB_CNT;
 
 	for (int i = 0; i < VALUES_TO_GENERATE_CNT; i++) {
@@ -221,12 +506,12 @@ void parseUartData(char *uartBuffer, Ctx *ctx) {
 }
 
 void mockNewUartSignal(char *uartBuffer, size_t uartBufferSize, Ctx *ctx) {
-	const double intervalSec = 0.3; // 300ms
+	const double intervalSec = 2; // 2s
 	static double lastTime = 0;
 
 	double now = GetTime();
 
-	if ((now - lastTime) >= intervalSec) {
+	if (!lastTime || (now - lastTime) >= intervalSec) {
 		lastTime = now;
 
 		generateMockUartSignal(uartBuffer, uartBufferSize);
@@ -236,38 +521,7 @@ void mockNewUartSignal(char *uartBuffer, size_t uartBufferSize, Ctx *ctx) {
 
 // =====
 
-void printBmsState(BmsState *state) {
-	printf("  batteryAvgTemp: %.2f\n", state->batteryAvgTemp.asFloat);
-	printf("        humidity: %.2f\n", state->humidity.asFloat);
-	printf("         minTemp: %.2f\n", state->minTemp.asFloat);
-	printf("         maxTemp: %.2f\n", state->maxTemp.asFloat);
-	printf("         avgTemp: %.2f\n", state->avgTemp.asFloat);
-	printf("      voltageLow: %.2f\n", state->voltageLow.asFloat);
-	printf("     voltagePack: %.2f\n", state->voltagePack.asFloat);
-	printf("      currentLow: %.2f\n", state->currentLow.asFloat);
-	printf("     currentPack: %.2f\n", state->currentPack.asFloat);
-	printf("      maxBMSTemp: %.2f\n", state->maxBMSTemp.asFloat);
-	printf("      minBMSTemp: %.2f\n", state->minBMSTemp.asFloat);
-	printf("     maxCellVolt: %.2f\n", state->maxCellVolt.asFloat);
-	printf("     minCellVolt: %.2f\n", state->minCellVolt.asFloat);
-	printf("   stateOfCharge: %.2f\n", state->stateOfCharge.asFloat);
-
-	for (int i = 0; i < PCB_CNT; i++) {
-		printf("    pcbTemps[%d]: %.2f\n", i, state->pcbTemps[i].asFloat);
-	}
-
-	for (int i = 0; i < MODULES_CNT * CELL_CNT_PER_MODULE; i++) {
-		printf("cellVoltages[%d]: %.2f\n", i, state->cellVoltages[i].asFloat);
-	}
-
-	for (int i = 0; i < MODULES_CNT * TEMP_SENSOR_CNT_PER_MODULE; i++) {
-		printf("   cellTemps[%d]: %.2f\n", i, state->cellTemps[i].asFloat);
-	}
-
-	printf("\n");
-}
-
-void *safeMalloc(size_t size) {
+static void *safeMalloc(size_t size) {
 	void *ptr = malloc(size);
 
 	assert(ptr != NULL);
@@ -275,9 +529,12 @@ void *safeMalloc(size_t size) {
 	return ptr;
 }
 
-int main() {
-	srand(69420); // Seed
+void clayErrorHandler(Clay_ErrorData error) {
+	printf("Clay Error: %s\n", error.errorText.chars);
+	assert(0);
+}
 
+int main() {
 	Clay_Raylib_Initialize(900, 600, "Battery Management System GUI", FLAG_WINDOW_RESIZABLE);
 
 	uint64_t arenaSize = Clay_MinMemorySize();
@@ -299,11 +556,17 @@ int main() {
 		}
 	);
 
+	// Clay_SetDebugModeEnabled(true);
 	SetTargetFPS(90);
 
 	// =====
 
-	Font fonts[1] = { LoadFont("assets/Roboto-Regular.ttf") };
+	// Note: `fontId`-s are index references to this array
+	Font fonts[] = {
+		LoadFont("assets/Roboto-Regular.ttf"),
+		LoadFont("assets/Roboto-SemiBold.ttf"),
+		LoadFont("assets/Roboto-Bold.ttf"),
+	};
 
 	Clay_SetMeasureTextFunction(Raylib_MeasureText, fonts);
 
@@ -314,10 +577,33 @@ int main() {
 
 	Ctx ctx = {0};
 
-	ctx.textConfig = (Clay_TextElementConfig) {
-		.fontSize      = 32,
-		.textColor     = {0, 0, 0, 255},
+	ctx.textConfigs.text = (Clay_TextElementConfig) {
+		.fontId        = 0,
+		.fontSize      = 18,
+		.textColor     = COLOR_TEXT_WHITE,
 		.textAlignment = CLAY_TEXT_ALIGN_CENTER,
+	};
+
+	ctx.textConfigs.heading1 = (Clay_TextElementConfig) {
+		.fontId        = 2,
+		.fontSize      = 36,
+		.textColor     = COLOR_TEXT_WHITE,
+		.textAlignment = CLAY_TEXT_ALIGN_CENTER,
+	};
+
+	ctx.textConfigs.heading2 = (Clay_TextElementConfig) {
+		.fontId        = 1,
+		.fontSize      = 24,
+		.textColor     = COLOR_TEXT_WHITE,
+		.textAlignment = CLAY_TEXT_ALIGN_CENTER,
+	};
+
+	ctx.textConfigs.heading3 = (Clay_TextElementConfig) {
+		.fontId        = 2,
+		.fontSize      = 20,
+		.textColor     = COLOR_TEXT_WHITE,
+		.textAlignment = CLAY_TEXT_ALIGN_CENTER,
+		.wrapMode      = CLAY_TEXT_WRAP_NONE,
 	};
 
 	while (!WindowShouldClose()) {
