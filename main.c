@@ -2,20 +2,19 @@
 //
 // This is a GUI for a battery management system for the battery of an electric car.
 // The program receives data over UART from the battery pack. The battery consists of 
-// multiple modules, where each module holds multiple battery cells. Each module has
-// multiple temperature sensors at different points in the module.
+// multiple modules, where each module holds multiple battery cells.
 // 
 // The program is using Raylib for rendering and a small layout library called Clay
 // for layout management.
 //
-// For testing purposes, we'll simulate receiving UART signals by generating
-// random data every 300ms and parsing it as if it were received over UART.
+// For testing purposes, I simulate the UART signal data by generating
+// random floats and parsing it as if it were received over UART.
 // =====
 
 #define CLAY_IMPLEMENTATION
-#include "clay.h"
-#include "raylib/raylib.h"
-#include "raylib/clay_renderer_raylib.c"
+#include "libs/clay.h"
+#include "libs/raylib/raylib.h"
+#include "libs/raylib/clay_renderer_raylib.c"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -107,7 +106,7 @@ static float clamp(float value, float min, float max) {
 	return (value < min) ? min : (value > max) ? max : value;
 }
 
-Clay_Color lerpBetween2Colors(float n, float min, float max) {
+Clay_Color lerpBetweenRedAndGreen(float n, float min, float max) {
 	n = clamp(n, min, max);
 
 	float t = clamp((n - min) / (max - min), 0, 1);
@@ -165,7 +164,7 @@ void buildModuleInfoCard(int moduleIdx, Ctx *ctx) {
 							int idx = moduleIdx * CELL_CNT_PER_MODULE + r * (CELL_CNT_PER_MODULE / TABLE_1_ROW_CNT) + c;
 
 							FloatAndStr cellVoltage = ctx->state.cellVoltages[idx];
-							Clay_Color bg = lerpBetween2Colors(cellVoltage.asFloat, ctx->state.minCellVolt.asFloat, ctx->state.maxCellVolt.asFloat);
+							Clay_Color bg = lerpBetweenRedAndGreen(cellVoltage.asFloat, ctx->state.minCellVolt.asFloat, ctx->state.maxCellVolt.asFloat);
 
 							CLAY_AUTO_ID({
 								.layout = {
@@ -197,7 +196,7 @@ void buildModuleInfoCard(int moduleIdx, Ctx *ctx) {
 							int idx = moduleIdx * TEMP_SENSOR_CNT_PER_MODULE + r * (TEMP_SENSOR_CNT_PER_MODULE / TABLE_2_ROW_CNT) + c;
 
 							FloatAndStr cellTemp = ctx->state.cellTemps[idx];
-							Clay_Color bg = lerpBetween2Colors(cellTemp.asFloat, ctx->state.minTemp.asFloat, ctx->state.maxTemp.asFloat);
+							Clay_Color bg = lerpBetweenRedAndGreen(cellTemp.asFloat, ctx->state.minTemp.asFloat, ctx->state.maxTemp.asFloat);
 
 							CLAY_AUTO_ID({
 								.layout = {
@@ -431,20 +430,20 @@ void generateMockUartSignal(char *dst, int dstSize) {
 		values[idx++] = 25 + simulateJitter(20); // pcbTemps
 	}
 
-	values[idx++] = 30    + simulateJitter(5);   // batteryAvgTemp
-	values[idx++] = 20    + simulateJitter(60);  // humidity
-	values[idx++] = 20    + simulateJitter(5);   // minTemp
-	values[idx++] = 40    + simulateJitter(10);  // maxTemp
-	values[idx++] = 30    + simulateJitter(5);   // avgTemp
-	values[idx++] = 11.5  + simulateJitter(1.5); // voltageLow
-	values[idx++] = 400   + simulateJitter(20);  // voltagePack
-	values[idx++] = -5    + simulateJitter(10);  // currentLow
-	values[idx++] = -100  + simulateJitter(200); // currentPack
-	values[idx++] = 45    + simulateJitter(10);  // maxBMSTemp
-	values[idx++] = 25    + simulateJitter(5);   // minBMSTemp
-	values[idx++] = 4.15  + simulateJitter(0.1); // maxCellVolt
-	values[idx++] = 3.50  + simulateJitter(0.1); // minCellVolt
-	values[idx++] = 0     + simulateJitter(100); // stateOfCharge
+	values[idx++] = 30   + simulateJitter(5);   // batteryAvgTemp
+	values[idx++] = 20   + simulateJitter(60);  // humidity
+	values[idx++] = 20   + simulateJitter(5);   // minTemp
+	values[idx++] = 40   + simulateJitter(10);  // maxTemp
+	values[idx++] = 30   + simulateJitter(5);   // avgTemp
+	values[idx++] = 11.5 + simulateJitter(1.5); // voltageLow
+	values[idx++] = 400  + simulateJitter(20);  // voltagePack
+	values[idx++] = -5   + simulateJitter(10);  // currentLow
+	values[idx++] = -100 + simulateJitter(200); // currentPack
+	values[idx++] = 45   + simulateJitter(10);  // maxBMSTemp
+	values[idx++] = 25   + simulateJitter(5);   // minBMSTemp
+	values[idx++] = 4.15 + simulateJitter(0.1); // maxCellVolt
+	values[idx++] = 3.50 + simulateJitter(0.1); // minCellVolt
+	values[idx++] = 0    + simulateJitter(100); // stateOfCharge
 
 	assert(idx == VALUES_TO_GENERATE_CNT);
 
@@ -501,7 +500,6 @@ void parseUartData(char *uartBuffer, Ctx *ctx) {
 			}
 		}
 
-
 		// =====
 
 		dst->asString.chars = uartBuffer;
@@ -533,6 +531,8 @@ void mockNewUartSignal(char *uartBuffer, size_t uartBufferSize, Ctx *ctx) {
 	}
 }
 
+// =====
+// Main
 // =====
 
 static void *safeMalloc(size_t size) {
@@ -570,7 +570,7 @@ int main() {
 		}
 	);
 
-	// Clay_SetDebugModeEnabled(true);
+	// Clay_SetDebugModeEnabled(true); // Similar to Chrome Devtools
 	SetTargetFPS(90);
 
 	// =====
