@@ -54,21 +54,21 @@ typedef struct {
 typedef struct {
 	FloatAndStr cellVoltages[MODULE_CNT * CELL_CNT_PER_MODULE];     // Voltages of all cells across all modules
 	FloatAndStr cellTemps[MODULE_CNT * TEMP_SENSOR_CNT_PER_MODULE]; // Temps of all sensors across all modules
-	FloatAndStr pcbTemps[PCB_CNT];                                  // DONE
-	FloatAndStr batteryAvgTemp;                                     // DONE
-	FloatAndStr humidity;                                           // DONE
-	FloatAndStr minTemp;                                            // DONE
-	FloatAndStr maxTemp;                                            // DONE
-	FloatAndStr avgTemp;                                            // DONE
-	FloatAndStr voltageLow;                                         // 
-	FloatAndStr voltagePack;                                        // 
-	FloatAndStr currentLow;                                         // 
-	FloatAndStr currentPack;                                        // 
-	FloatAndStr minBMSTemp;                                         // 
-	FloatAndStr maxBMSTemp;                                         // 
-	FloatAndStr minCellVolt;                                        // 
-	FloatAndStr maxCellVolt;                                        // 
-	FloatAndStr stateOfCharge;                                      // 
+	FloatAndStr pcbTemps[PCB_CNT];
+	FloatAndStr batteryAvgTemp;
+	FloatAndStr humidity;
+	FloatAndStr minTemp;
+	FloatAndStr maxTemp;
+	FloatAndStr avgTemp;
+	FloatAndStr voltageLow;
+	FloatAndStr voltagePack;
+	FloatAndStr currentLow;
+	FloatAndStr currentPack;
+	FloatAndStr minBMSTemp;
+	FloatAndStr maxBMSTemp;
+	FloatAndStr minCellVolt;
+	FloatAndStr maxCellVolt;
+	FloatAndStr stateOfCharge;
 } BmsState;
 
 typedef struct {
@@ -79,6 +79,9 @@ typedef struct {
 		Clay_TextElementConfig heading2;
 		Clay_TextElementConfig heading3;
 	} textConfigs;
+	struct {
+		Texture2D topDutchLogo;
+	} assets;
 	BmsState state;
 } Ctx;
 
@@ -173,7 +176,7 @@ void buildModuleInfoCard(int moduleIdx, Ctx *ctx) {
 							}) {
 								CLAY_TEXT(
 									cellVoltage.asString,
-									CLAY_TEXT_CONFIG({ .fontSize = 14, .textColor = {0, 0, 0, 255} })
+									CLAY_TEXT_CONFIG({ .fontId = 1, .fontSize = 14, .textColor = {0, 0, 0, 255} })
 								);
 							}
 						}
@@ -205,7 +208,7 @@ void buildModuleInfoCard(int moduleIdx, Ctx *ctx) {
 							}) {
 								CLAY_TEXT(
 									cellTemp.asString,
-									CLAY_TEXT_CONFIG({ .fontSize = 14, .textColor = {0, 0, 0, 255} })
+									CLAY_TEXT_CONFIG({ .fontId = 1, .fontSize = 14, .textColor = {0, 0, 0, 255} })
 								);
 							}
 						}
@@ -381,13 +384,24 @@ void buildGui(Ctx *ctx) {
 
 				CLAY_AUTO_ID({
 					.layout = {
-						.sizing  = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) },
-						.padding = CLAY_PADDING_ALL(8),
+						.sizing         = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) },
+						.childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },
+						.padding        = CLAY_PADDING_ALL(8),
 					},
 					.cornerRadius    = CLAY_CORNER_RADIUS(8),
 					.backgroundColor = COLOR_GRAY_BG,
 					.border          = BORDER,
-				}) {}
+				}) {
+					float imgAspectRatio = (float)ctx->assets.topDutchLogo.width / (float)ctx->assets.topDutchLogo.height;
+
+					CLAY_AUTO_ID({
+						.layout = {
+							.sizing = { CLAY_SIZING_GROW(0, 350) },
+						},
+						.image       = { .imageData = &ctx->assets.topDutchLogo },
+						.aspectRatio = imgAspectRatio,
+					});
+				}
 			}
 		}
 	}
@@ -576,6 +590,8 @@ int main() {
 	};
 
 	Ctx ctx = {0};
+
+	ctx.assets.topDutchLogo = LoadTexture("assets/top-dutch-logo.png");
 
 	ctx.textConfigs.text = (Clay_TextElementConfig) {
 		.fontId        = 0,
