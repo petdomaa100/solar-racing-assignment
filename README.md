@@ -21,3 +21,7 @@ make
 
 ./bms_gui
 ```
+
+## Q & A
+
+Feel free to open an issue for questions about the implementation or other design choices.
